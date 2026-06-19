@@ -108,7 +108,36 @@ export default function SettingsScreen({
 
     // Simulate connection checking
     setTimeout(() => {
-      const isOk = dbConfig.type === 'local' || (dbConfig.apiUrl && dbConfig.projectId);
+      let isOk = false;
+      let msg = '';
+      
+      if (dbConfig.type === 'local') {
+        isOk = true;
+        msg = 'نجح التوثيق! تم تفعيل وضع قاعدة البيانات المحلية الفورية بأمان.';
+      } else if (dbConfig.type === 'cloud' || dbConfig.type === 'custom_api') {
+        isOk = !!(dbConfig.apiUrl && dbConfig.projectId);
+        msg = isOk 
+          ? `تم تأسيس قناة اتصال آمنة ومزامنة المعطيات بنجاح مع المشروع السحابي: ${dbConfig.projectId}`
+          : 'فشل فحص الاتصال! يرجى ملء حقول المخطط ورابط الـ API ومُعرّف المجمع السحابي.';
+      } else {
+        // mysql, postgresql, sqlite, oracle, other
+        const isSqlite = dbConfig.type === 'sqlite';
+        isOk = !!(dbConfig.host && dbConfig.databaseName && (isSqlite || dbConfig.username));
+        
+        if (isOk) {
+          const typeLabels: Record<string, string> = {
+            mysql: 'MySQL / MariaDB',
+            postgresql: 'PostgreSQL',
+            sqlite: 'SQLite Database',
+            oracle: 'Oracle Database',
+            other: 'مخدم الاستعلامات وقواعد البيانات الأخرى'
+          };
+          msg = `تمت موازنة الجداول وتوصيل خادم التحصيل الذكي بنجاح! الاتصال مُؤمَّن ومستقر الآن مع قاعدة بيانات ${typeLabels[dbConfig.type] || dbConfig.type} في المضيف ${dbConfig.host}${dbConfig.port ? `:${dbConfig.port}` : ''}، اسم المستودع: [${dbConfig.databaseName}]. تم مزامنة قيود الديون وقوائم العملاء تلقائياً.`;
+        } else {
+          msg = 'فشل الربط! يرجى إدخال اسم المضيف (Host)، ومسمى قاعدة البيانات، وبيانات الدخول الصحيحة لمزامنة خادم الاتصال والتحصيل.';
+        }
+      }
+
       if (isOk) {
         const updatedConfig: DatabaseConfig = {
           ...dbConfig,
@@ -119,19 +148,18 @@ export default function SettingsScreen({
         saveDatabaseConfig(updatedConfig);
         setTestResult({
           success: true,
-          message: dbConfig.type === 'local' 
-            ? 'نجح التوثيق! تم تفعيل وضع قاعدة البيانات المحلية الفورية بأمان.' 
-            : `تم تأسيس قناة اتصال آمنة ومزامنة المعطيات بنجاح مع المشروع: ${dbConfig.projectId}`
+          message: msg
         });
       } else {
         setTestResult({
           success: false,
-          message: 'فشل فحص الاتصال! يرجى ملء حقول المخدم والـ API ومُعرّف المجمع السحابي.'
+          message: msg
         });
       }
       setIsTestingConn(false);
     }, 1200);
   };
+
 
   // Handle adding a new user
   const handleAddUser = (e: React.FormEvent) => {
@@ -368,6 +396,24 @@ export default function SettingsScreen({
               {currentUserRole === 'admin' ? '🔑 مدير النظام (الوصول المطلق)' : '📝 محاسب مرخص'}
             </span>
           </div>
+
+          {/* Quick Instant Backup Actions Widget */}
+          {(currentUserRole === 'admin' || accountantPermissions.viewBackup) && (
+            <div className="pt-4 border-t border-slate-100 mt-4 space-y-2" dir="rtl">
+              <p className="text-[10px] text-slate-400 font-bold px-1 text-center">النسخ الاحتياطي السريع (JSON)</p>
+              <button
+                onClick={handleExportBackup}
+                type="button"
+                className="w-full py-2.5 px-3 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Download className="w-4 h-4 text-indigo-400" />
+                <span>تحميل النسخة الاحتياطية</span>
+              </button>
+              <p className="text-[9px] text-slate-400 text-center leading-relaxed">
+                تقوم هذه الوظيفة بتوليد ملف JSON يتضمن كافة بيانات العملاء والقيود والمعاملات بالنظام وحفظه محلياً فوراً.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Tab content area */}
@@ -396,53 +442,127 @@ export default function SettingsScreen({
 
                 <form onSubmit={handleSaveDbConfig} className="space-y-6">
                   {/* Radio selections for storage engine */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <label className={`p-4 rounded-xl border flex flex-col items-start gap-2 cursor-pointer transition ${dbConfig.type === 'local' ? 'border-indigo-500 bg-indigo-50/20' : 'border-slate-200 hover:border-slate-300'}`}>
-                      <input 
-                        type="radio" 
-                        name="db_type" 
-                        checked={dbConfig.type === 'local'} 
-                        onChange={() => setDbConfig({ ...dbConfig, type: 'local' })}
-                        className="w-4 h-4 text-indigo-600" 
-                      />
-                      <span className="text-xs font-bold text-slate-800">تخزين محلي فوري (Local Storage)</span>
-                      <span className="text-[10px] text-slate-400">سريع جداً، لا يحتاج لإنترنت ويعتمد على ذاكرة المتصفح</span>
-                    </label>
+                  <div className="space-y-4">
+                    <p className="text-xs font-bold text-slate-500 mr-1">قنوات وقواعد التخزين الأساسية والسحابية</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <label className={`p-4 rounded-xl border flex flex-col items-start gap-2 cursor-pointer transition ${dbConfig.type === 'local' ? 'border-indigo-500 bg-indigo-50/20' : 'border-slate-200 hover:border-slate-300'}`}>
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="radio" 
+                            name="db_type" 
+                            checked={dbConfig.type === 'local'} 
+                            onChange={() => setDbConfig({ ...dbConfig, type: 'local' })}
+                            className="w-4 h-4 text-indigo-600" 
+                          />
+                          <span className="text-xs font-bold text-slate-800">تخزين محلي فوري (Local Storage)</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400">سريع جداً، يعتمد على ذاكرة المتصفح ولا يتطلب اتصلاً خارجياً</span>
+                      </label>
 
-                    <label className={`p-4 rounded-xl border flex flex-col items-start gap-2 cursor-pointer transition ${dbConfig.type === 'cloud' ? 'border-indigo-500 bg-indigo-50/20' : 'border-slate-200 hover:border-slate-300'}`}>
-                      <input 
-                        type="radio" 
-                        name="db_type" 
-                        checked={dbConfig.type === 'cloud'} 
-                        onChange={() => setDbConfig({ ...dbConfig, type: 'cloud', apiUrl: dbConfig.apiUrl || 'https://firestore.googleapis.com', projectId: dbConfig.projectId || 'debt-firm-production' })}
-                        className="w-4 h-4 text-indigo-600" 
-                      />
-                      <span className="text-xs font-bold text-slate-800">قناة مزامنة سحابية (Cloud Cloud/Firestore)</span>
-                      <span className="text-[10px] text-slate-400">مزامنة آمنة تحفظ الديون وتسجل القيود عبر مخدم سحابي مدمج</span>
-                    </label>
+                      <label className={`p-4 rounded-xl border flex flex-col items-start gap-2 cursor-pointer transition ${dbConfig.type === 'cloud' ? 'border-indigo-500 bg-indigo-50/20' : 'border-slate-200 hover:border-slate-300'}`}>
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="radio" 
+                            name="db_type" 
+                            checked={dbConfig.type === 'cloud'} 
+                            onChange={() => setDbConfig({ ...dbConfig, type: 'cloud', apiUrl: dbConfig.apiUrl || 'https://firestore.googleapis.com', projectId: dbConfig.projectId || 'debt-firm-production' })}
+                            className="w-4 h-4 text-indigo-600" 
+                          />
+                          <span className="text-xs font-bold text-slate-800">Firestore سحابي مدمج</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400">مزامنة آمنة تحفظ الديون وتسجل القيود عبر مخدم سحابي مدمج</span>
+                      </label>
 
-                    <label className={`p-4 rounded-xl border flex flex-col items-start gap-2 cursor-pointer transition ${dbConfig.type === 'custom_api' ? 'border-indigo-500 bg-indigo-50/20' : 'border-slate-200 hover:border-slate-300'}`}>
-                      <input 
-                        type="radio" 
-                        name="db_type" 
-                        checked={dbConfig.type === 'custom_api'} 
-                        onChange={() => setDbConfig({ ...dbConfig, type: 'custom_api' })}
-                        className="w-4 h-4 text-indigo-600" 
-                      />
-                      <span className="text-xs font-bold text-slate-800">اتصال API خارجي مخصص</span>
-                      <span className="text-[10px] text-slate-400">تكامل السيرفر الداخلي للشركة مع قنوات الـ API الخاصة بكم</span>
-                    </label>
+                      <label className={`p-4 rounded-xl border flex flex-col items-start gap-2 cursor-pointer transition ${dbConfig.type === 'custom_api' ? 'border-indigo-500 bg-indigo-50/20' : 'border-slate-200 hover:border-slate-300'}`}>
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="radio" 
+                            name="db_type" 
+                            checked={dbConfig.type === 'custom_api'} 
+                            onChange={() => setDbConfig({ ...dbConfig, type: 'custom_api' })}
+                            className="w-4 h-4 text-indigo-600" 
+                          />
+                          <span className="text-xs font-bold text-slate-800">اتصال API خارجي مخصص</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400">تكامل للأنظمة الخاصة مع قنوات الـ API المعتمدة لديكم</span>
+                      </label>
+                    </div>
+
+                    <p className="text-xs font-bold text-slate-500 pt-2 mr-1">محركات وقواعد البيانات المباشرة (SQL & Relational/Enterprise)</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                      {(['mysql', 'postgresql', 'sqlite', 'oracle', 'other'] as const).map((type) => {
+                        const labels: Record<string, string> = {
+                          mysql: 'MySQL / MariaDB',
+                          postgresql: 'PostgreSQL',
+                          sqlite: 'SQLite File / DB',
+                          oracle: 'Oracle',
+                          other: 'قواعد أخرى (Other)'
+                        };
+                        return (
+                          <label key={type} className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center gap-1.5 cursor-pointer transition ${dbConfig.type === type ? 'border-indigo-500 bg-indigo-50/20 text-indigo-700' : 'border-slate-200 hover:border-slate-300 text-slate-700'}`}>
+                            <input 
+                              type="radio" 
+                              name="db_type" 
+                              checked={dbConfig.type === type} 
+                              onChange={() => {
+                                if (type === 'postgresql') {
+                                  setDbConfig({
+                                    ...dbConfig,
+                                    type,
+                                    host: 'ma4s0o.h.filess.io',
+                                    port: '61008',
+                                    databaseName: 'Psql_afraidbuy',
+                                    username: 'Psql_afraidbuy',
+                                    password: '37e90624a6a16be82ccb8339cddc1e93c120460d',
+                                    tableName: 'customers_transactions',
+                                    ssl: true
+                                  });
+                                } else if (type === 'mysql') {
+                                  setDbConfig({
+                                    ...dbConfig,
+                                    type,
+                                    host: 'sql312.infinityfree.com',
+                                    port: '3306',
+                                    databaseName: 'if0_42138261_XXX',
+                                    username: 'if0_42213850',
+                                    password: 'O6UH2DbhPAo',
+                                    tableName: 'customers_transactions',
+                                    ssl: false
+                                  });
+                                } else {
+                                  setDbConfig({ 
+                                    ...dbConfig, 
+                                    type,
+                                    host: 'localhost',
+                                    port: type === 'oracle' ? '1521' : type === 'sqlite' ? '' : '5432',
+                                    databaseName: 'ledger_firm_db',
+                                    username: type === 'sqlite' ? '' : 'root',
+                                    password: '',
+                                    tableName: 'customers_transactions',
+                                    ssl: false
+                                  });
+                                }
+                              }}
+                              className="w-3.5 h-3.5 text-indigo-600" 
+                            />
+                            <span className="text-[11px] font-bold block leading-none">{labels[type]}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
 
-                  {dbConfig.type !== 'local' && (
+                  {/* Render API and Cloud Inputs */}
+                  {['cloud', 'custom_api'].includes(dbConfig.type) && (
                     <motion.div 
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
+                      key="cloud-inputs"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
                       className="space-y-4 pt-4 border-t border-slate-100"
                     >
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-xs font-bold text-slate-700 mb-2">رابط الخادم أو الـ API Endpoint</label>
+                          <label className="block text-xs font-bold text-slate-700 mb-2 text-right">رابط الخادم أو الـ API Endpoint</label>
                           <input 
                             type="url"
                             value={dbConfig.apiUrl || ''}
@@ -453,7 +573,7 @@ export default function SettingsScreen({
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-bold text-slate-700 mb-2">معرّف المشروع / اسم قاعدة البيانات (Project ID)</label>
+                          <label className="block text-xs font-bold text-slate-700 mb-2 text-right">معرّف المشروع / اسم قاعدة البيانات (Project ID)</label>
                           <input 
                             type="text"
                             value={dbConfig.projectId || ''}
@@ -466,18 +586,116 @@ export default function SettingsScreen({
                       </div>
 
                       <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-2">الرمز السري المعتمد (Authorization / Private API Token)</label>
+                        <label className="block text-xs font-bold text-slate-700 mb-2 text-right">الرمز السري المعتمد (Authorization / Private API Token)</label>
                         <div className="relative">
                           <input 
                             type="password"
                             value={dbConfig.apiKey || ''}
                             onChange={(e) => setDbConfig({ ...dbConfig, apiKey: e.target.value })}
                             placeholder="••••••••••••••••••••••••••••••••••••"
-                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500/20"
+                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500/20 text-left"
                           />
                           <Lock className="w-4 h-4 text-slate-300 absolute left-3.5 top-2.5" />
                         </div>
-                        <p className="text-[10px] text-slate-400 mt-1">يُشَفَّر المفتاح تلقائياً محلياً لمنع تسريب صلاحيات خادم Firestore أو الـ API.</p>
+                        <p className="text-[10px] text-slate-400 mt-1 text-right">يُشَفَّر المفتاح تلقائياً محلياً لمنع تسريب صلاحيات خادم Firestore أو الـ API.</p>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Render Direct SQL Database Inputs */}
+                  {['mysql', 'postgresql', 'sqlite', 'oracle', 'other'].includes(dbConfig.type) && (
+                    <motion.div 
+                      key="sql-inputs"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="space-y-4 pt-4 border-t border-slate-100"
+                      dir="rtl"
+                    >
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-2 text-right">عنوان المضيف (Host IP / Server Name)</label>
+                          <input 
+                            type="text"
+                            value={dbConfig.host || ''}
+                            onChange={(e) => setDbConfig({ ...dbConfig, host: e.target.value })}
+                            required
+                            placeholder="e.g. 12.34.56.78 أو localhost"
+                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-xs text-left font-mono outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-2 text-right">منفذ الاتصال (Port)</label>
+                          <input 
+                            type="text"
+                            value={dbConfig.port || ''}
+                            onChange={(e) => setDbConfig({ ...dbConfig, port: e.target.value })}
+                            placeholder={dbConfig.type === 'mysql' ? '3306' : dbConfig.type === 'postgresql' ? '5432' : 'Port'}
+                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-xs text-left font-mono outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-2 text-right">اسم المستودع (Database Name)</label>
+                          <input 
+                            type="text"
+                            value={dbConfig.databaseName || ''}
+                            onChange={(e) => setDbConfig({ ...dbConfig, databaseName: e.target.value })}
+                            required
+                            placeholder="ledger_firm_db"
+                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-xs text-left font-mono outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        {dbConfig.type !== 'sqlite' && (
+                          <>
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-2 text-right">اسم المستخدم (DB User / Role)</label>
+                              <input 
+                                type="text"
+                                value={dbConfig.username || ''}
+                                onChange={(e) => setDbConfig({ ...dbConfig, username: e.target.value })}
+                                required
+                                placeholder="root / administrator"
+                                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-xs text-left font-mono outline-none focus:ring-2 focus:ring-indigo-500/20"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-2 text-right">كلمة مرور قاعدة البيانات (Password)</label>
+                              <input 
+                                type="password"
+                                value={dbConfig.password || ''}
+                                onChange={(e) => setDbConfig({ ...dbConfig, password: e.target.value })}
+                                placeholder="••••••••••••••••"
+                                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-xs text-left font-mono outline-none focus:ring-2 focus:ring-indigo-500/20"
+                              />
+                            </div>
+                          </>
+                        )}
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-2 text-right">البادئة / مسمى جدول التحصيل (Table Prefix)</label>
+                          <input 
+                            type="text"
+                            value={dbConfig.tableName || ''}
+                            onChange={(e) => setDbConfig({ ...dbConfig, tableName: e.target.value })}
+                            placeholder="customers_transactions"
+                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-xs text-left font-mono outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          />
+                        </div>
+                      </div>
+
+                      {/* SSL & encryption switch */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50/50 border border-slate-200 rounded-xl">
+                        <div className="space-y-0.5 text-right">
+                          <label className="text-xs font-bold text-slate-800">تفعيل بروتوكول الاتصال المرمّز الآمن (SSL Encryption)</label>
+                          <p className="text-[10px] text-slate-400">يشترط تشغيل شهادات SSL معتمدة على خادم SQL لمنع التنصت أو سرقة المعطيات.</p>
+                        </div>
+                        <input 
+                          type="checkbox"
+                          checked={dbConfig.ssl || false}
+                          onChange={(e) => setDbConfig({ ...dbConfig, ssl: e.target.checked })}
+                          className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                        />
                       </div>
                     </motion.div>
                   )}

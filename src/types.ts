@@ -36,12 +36,19 @@ export interface User {
 }
 
 export interface DatabaseConfig {
-  type: 'local' | 'cloud' | 'custom_api';
+  type: 'local' | 'cloud' | 'custom_api' | 'mysql' | 'postgresql' | 'sqlite' | 'oracle' | 'other';
   status: 'connected' | 'disconnected' | 'offline';
   apiUrl?: string;
   apiKey?: string;
   projectId?: string;
   lastSync?: string;
+  host?: string;
+  port?: string;
+  databaseName?: string;
+  username?: string;
+  password?: string;
+  ssl?: boolean;
+  tableName?: string;
 }
 
 export interface AccountantPermissions {

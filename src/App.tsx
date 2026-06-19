@@ -8,7 +8,7 @@ import { Customer, Transaction, AuthState, TransactionType, AccountantPermission
 import { 
   getCustomers, getTransactions, saveCustomers, saveTransactions, 
   getAuthState, saveAuthState, getAccountantPermissions, saveAccountantPermissions,
-  getUsers
+  getUsers, getTheme, saveTheme
 } from './localStorage';
 import LoginScreen from './components/LoginScreen';
 import Header from './components/Header';
@@ -23,6 +23,22 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
+  const [theme, setTheme] = useState<'light' | 'dark'>(getTheme());
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
+
+  const handleToggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    saveTheme(nextTheme);
+  };
+
   const [auth, setAuth] = useState<AuthState>(getAuthState());
   const [accountantPermissions, setAccountantPermissions] = useState<AccountantPermissions>(getAccountantPermissions());
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -264,6 +280,8 @@ export default function App() {
           }}
           isSettingsOpen={isSettingsOpen}
           canViewDashboard={canViewDashboard}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
         />
       </div>
 

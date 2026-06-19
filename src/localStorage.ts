@@ -232,17 +232,46 @@ export function getDatabaseConfig(): DatabaseConfig {
     const data = localStorage.getItem(DB_CONFIG_KEY);
     if (!data) {
       const config: DatabaseConfig = {
-        type: 'local',
+        type: 'postgresql',
         status: 'connected',
-        lastSync: new Date().toISOString()
+        lastSync: new Date().toISOString(),
+        host: 'ma4s0o.h.filess.io',
+        port: '61008',
+        databaseName: 'Psql_afraidbuy',
+        username: 'Psql_afraidbuy',
+        password: '37e90624a6a16be82ccb8339cddc1e93c120460d',
+        ssl: true,
+        tableName: 'customers_transactions'
       };
       localStorage.setItem(DB_CONFIG_KEY, JSON.stringify(config));
       return config;
     }
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    // If it was local or unconfigured with host, pre-populate the PostgreSQL fields so they're instantly ready
+    if (!parsed.host) {
+      parsed.type = 'postgresql';
+      parsed.host = 'ma4s0o.h.filess.io';
+      parsed.port = '61008';
+      parsed.databaseName = 'Psql_afraidbuy';
+      parsed.username = 'Psql_afraidbuy';
+      parsed.password = '37e90624a6a16be82ccb8339cddc1e93c120460d';
+      parsed.ssl = true;
+      parsed.tableName = parsed.tableName || 'customers_transactions';
+    }
+    return parsed;
   } catch (error) {
     console.error('Error fetching database config', error);
-    return { type: 'local', status: 'connected' };
+    return {
+      type: 'postgresql',
+      status: 'connected',
+      host: 'ma4s0o.h.filess.io',
+      port: '61008',
+      databaseName: 'Psql_afraidbuy',
+      username: 'Psql_afraidbuy',
+      password: '37e90624a6a16be82ccb8339cddc1e93c120460d',
+      ssl: true,
+      tableName: 'customers_transactions'
+    };
   }
 }
 
@@ -296,5 +325,22 @@ export function saveAccountantPermissions(perms: AccountantPermissions): void {
     localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(perms));
   } catch (error) {
     console.error('Error saving accountant permissions', error);
+  }
+}
+
+export function getTheme(): 'light' | 'dark' {
+  try {
+    const val = localStorage.getItem('theme');
+    return val === 'dark' ? 'dark' : 'light';
+  } catch (error) {
+    return 'light';
+  }
+}
+
+export function saveTheme(theme: 'light' | 'dark'): void {
+  try {
+    localStorage.setItem('theme', theme);
+  } catch (error) {
+    console.error('Error saving theme', error);
   }
 }

@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { ShieldCheck, LogOut, TrendingUp, TrendingDown, Users, Wallet, Settings } from 'lucide-react';
+import { ShieldCheck, LogOut, TrendingUp, TrendingDown, Users, Wallet, Settings, Sun, Moon } from 'lucide-react';
 
 interface HeaderProps {
   username: string;
@@ -15,6 +15,8 @@ interface HeaderProps {
   onToggleSettings: () => void;
   isSettingsOpen: boolean;
   canViewDashboard?: boolean;
+  theme?: 'light' | 'dark';
+  onToggleTheme?: () => void;
 }
 
 export default function Header({ 
@@ -25,7 +27,9 @@ export default function Header({
   totalCreditOverall,
   onToggleSettings,
   isSettingsOpen,
-  canViewDashboard = true
+  canViewDashboard = true,
+  theme = 'light',
+  onToggleTheme
 }: HeaderProps) {
   
   const netDebtDifference = totalDebitOverall - totalCreditOverall;
@@ -46,6 +50,24 @@ export default function Header({
             </div>
             
             <span className="text-slate-350">|</span>
+
+            {onToggleTheme && (
+              <>
+                <button
+                  onClick={onToggleTheme}
+                  className="hover:text-indigo-600 transition flex items-center gap-1.5 font-bold cursor-pointer"
+                  title={theme === 'dark' ? 'تحويل للظلام' : 'تحويل للمضيء'}
+                >
+                  {theme === 'dark' ? (
+                    <Sun className="w-3.5 h-3.5 text-amber-500" />
+                  ) : (
+                    <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                  )}
+                  <span>{theme === 'dark' ? 'الوضع المضيء' : 'وضع الظلام'}</span>
+                </button>
+                <span className="text-slate-350">|</span>
+              </>
+            )}
             
             <button
               onClick={onToggleSettings}
