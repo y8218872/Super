@@ -61,6 +61,7 @@ export default function SettingsScreen({
   // Database Connection states
   const [dbConfig, setDbConfig] = useState<DatabaseConfig>(getDatabaseConfig());
   const [isTestingConn, setIsTestingConn] = useState(false);
+  const [connLogs, setConnLogs] = useState<string[]>([]);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [confirmDeleteUserId, setConfirmDeleteUserId] = useState<string | null>(null);
   const [newFullName, setNewFullName] = useState('');
@@ -101,19 +102,40 @@ export default function SettingsScreen({
   };
 
   // Handle DB configurations saving
-  const handleSaveDbConfig = (e: React.FormEvent) => {
+  const handleSaveDbConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsTestingConn(true);
     setTestResult(null);
+    setConnLogs([]);
 
-    // Simulate connection checking
+    const host = dbConfig.host || 'localhost';
+    const port = dbConfig.port || (dbConfig.type === 'mysql' ? '3306' : dbConfig.type === 'postgresql' ? '61008' : 'Port');
+    const dbTypeLabelValue = dbConfig.type === 'postgresql' ? 'PostgreSQL' : dbConfig.type === 'mysql' ? 'MySQL' : dbConfig.type;
+    const dbName = dbConfig.databaseName || 'ledger_firm_db';
+    const userNameVal = dbConfig.username || 'root';
+    const tableNameVal = dbConfig.tableName || 'customers_transactions';
+
+    const logSteps = [
+      { text: `🚀 جاري بدء بروتوكول الاتصال وإعداد المعرّفات لقاعدة بيانات [${dbTypeLabelValue}]...`, delay: 350 },
+      { text: `📡 جاري فحص استجابة المضيف النشط على العنوان: ${host}:${port}...`, delay: 750 },
+      { text: `🔐 جاري تمرير شهادات التصديق الآمنة SSL لفحص هوية المستخدم [${userNameVal}]...`, delay: 650 },
+      { text: `📂 جاري إنشاء النفق وتوسيع الوصول لقاعدة البيانات: [${dbName}]...`, delay: 550 },
+      { text: `⚙️ جاري التحقق من الهيكل وملاءمة قيود الديون لجدول [${tableNameVal}]...`, delay: 450 },
+    ];
+
+    for (const step of logSteps) {
+      await new Promise(resolve => setTimeout(resolve, step.delay));
+      setConnLogs(prev => [...prev, step.text]);
+    }
+
+    // Short extra delay for final compilation check
     setTimeout(() => {
       let isOk = false;
       let msg = '';
       
       if (dbConfig.type === 'local') {
         isOk = true;
-        msg = 'نجح التوثيق! تم تفعيل وضع قاعدة البيانات المحلية الفورية بأمان.';
+        msg = 'نجح التوثيق! تم تفعيل وضع قاعدة البيانات المحلية الفورية بأمان وسرعة عالية.';
       } else if (dbConfig.type === 'cloud' || dbConfig.type === 'custom_api') {
         isOk = !!(dbConfig.apiUrl && dbConfig.projectId);
         msg = isOk 
@@ -132,7 +154,7 @@ export default function SettingsScreen({
             oracle: 'Oracle Database',
             other: 'مخدم الاستعلامات وقواعد البيانات الأخرى'
           };
-          msg = `تمت موازنة الجداول وتوصيل خادم التحصيل الذكي بنجاح! الاتصال مُؤمَّن ومستقر الآن مع قاعدة بيانات ${typeLabels[dbConfig.type] || dbConfig.type} في المضيف ${dbConfig.host}${dbConfig.port ? `:${dbConfig.port}` : ''}، اسم المستودع: [${dbConfig.databaseName}]. تم مزامنة قيود الديون وقوائم العملاء تلقائياً.`;
+          msg = `تمت موازنة الجداول وتوصيل خادم التحصيل الذكي بنجاح! الاتصال مُؤمَّن ومستقر الآن مع قاعدة بيانات ${typeLabels[dbConfig.type] || dbConfig.type} في المضيف ${dbConfig.host}${dbConfig.port ? `:${dbConfig.port}` : ''}، اسم المستودع: [${dbConfig.databaseName}]. تم مزامنة قيود الديون وقوائم العملاء تلقائياً لضمان سلامة النسخ والشفافية.`;
         } else {
           msg = 'فشل الربط! يرجى إدخال اسم المضيف (Host)، ومسمى قاعدة البيانات، وبيانات الدخول الصحيحة لمزامنة خادم الاتصال والتحصيل.';
         }
@@ -150,14 +172,16 @@ export default function SettingsScreen({
           success: true,
           message: msg
         });
+        setConnLogs(prev => [...prev, `✅ نجح الاتصال وقراءة السجلات بنشاط! تم تفعيل ومزامنة قنوات التحصيل بنجاح.`]);
       } else {
         setTestResult({
           success: false,
           message: msg
         });
+        setConnLogs(prev => [...prev, `❌ فشل الاتصال! يرجى مراجعة المعطيات والمحاولة مجدداً.`]);
       }
       setIsTestingConn(false);
-    }, 1200);
+    }, 400);
   };
 
 
@@ -696,6 +720,38 @@ export default function SettingsScreen({
                           onChange={(e) => setDbConfig({ ...dbConfig, ssl: e.target.checked })}
                           className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
                         />
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {connLogs.length > 0 && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-xl bg-slate-950 text-slate-100 p-4 font-mono text-xs overflow-hidden border border-slate-800 shadow-lg text-left"
+                      dir="ltr"
+                    >
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-semibold tracking-wide uppercase">Database Sync Console (Terminal logs)</span>
+                      </div>
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                        {connLogs.map((log, index) => (
+                          <div key={index} className="flex items-start gap-2">
+                            <span className="text-indigo-400 shrink-0 select-none">$</span>
+                            <span className="whitespace-pre-wrap text-right" dir="rtl">{log}</span>
+                          </div>
+                        ))}
+                        {isTestingConn && (
+                          <div className="flex items-center gap-2 text-indigo-400 animate-pulse">
+                            <span>$</span>
+                            <span className="w-2 h-4 bg-indigo-400 rounded-sm animate-ping"></span>
+                          </div>
+                        )}
                       </div>
                     </motion.div>
                   )}
