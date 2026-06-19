@@ -60,6 +60,24 @@ export interface AccountantPermissions {
   viewDashboard: boolean;
 }
 
+export interface AutoBackupRestorePoint {
+  id: string;
+  name: string;
+  timestamp: string;
+  size: string;
+  customersCount: number;
+  transactionsCount: number;
+  data: string;
+}
+
+export interface AutoBackupConfig {
+  enabled: boolean;
+  interval: 'every_change' | 'daily' | 'weekly' | 'hourly' | 'manual';
+  renameWithDateTime: boolean;
+  lastBackupTime?: string;
+  autoRestorePoints: AutoBackupRestorePoint[];
+}
+
 export interface AuthState {
   isAuthenticated: boolean;
   username: string;

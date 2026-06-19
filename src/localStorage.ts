@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Customer, Transaction, User, DatabaseConfig, AccountantPermissions } from './types';
+import { Customer, Transaction, User, DatabaseConfig, AccountantPermissions, AutoBackupConfig } from './types';
 
 const CUSTOMERS_KEY = 'debt_app_customers_v1';
 const TRANSACTIONS_KEY = 'debt_app_transactions_v1';
@@ -342,5 +342,122 @@ export function saveTheme(theme: 'light' | 'dark'): void {
     localStorage.setItem('theme', theme);
   } catch (error) {
     console.error('Error saving theme', error);
+  }
+}
+
+// ARABIC DAY-DATE FILENAME GENERATOR
+export function getArabicDayAndDate(includeTime = true, customDate?: Date): { day: string, date: string, filename: string } {
+  const dateObj = customDate || new Date();
+  
+  const daysArabic = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+  const dayName = daysArabic[dateObj.getDay()];
+  
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const year = dateObj.getFullYear();
+  
+  let timeStr = '';
+  if (includeTime) {
+    const hours = String(dateObj.getHours()).padStart(2, '0');
+    const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+    timeStr = `_الساعة_${hours}-${minutes}`;
+  }
+  
+  const dateFormatted = `${day}-${month}-${year}`;
+  const filename = `النسخة_الاحتياطية_${dayName}_${dateFormatted}${timeStr}`;
+  
+  return {
+    day: dayName,
+    date: dateFormatted,
+    filename
+  };
+}
+
+const AUTO_BACKUP_KEY = 'debt_app_auto_backup_config_v1';
+
+export function getAutoBackupConfig(): AutoBackupConfig {
+  try {
+    const data = localStorage.getItem(AUTO_BACKUP_KEY);
+    if (!data) {
+      const defaultConfig: AutoBackupConfig = {
+        enabled: true,
+        interval: 'every_change',
+        renameWithDateTime: true,
+        autoRestorePoints: []
+      };
+      localStorage.setItem(AUTO_BACKUP_KEY, JSON.stringify(defaultConfig));
+      return defaultConfig;
+    }
+    const parsed = JSON.parse(data);
+    if (!parsed.autoRestorePoints) {
+      parsed.autoRestorePoints = [];
+    }
+    return parsed;
+  } catch (err) {
+    console.error('Error fetching auto backup config', err);
+    return {
+      enabled: true,
+      interval: 'every_change',
+      renameWithDateTime: true,
+      autoRestorePoints: []
+    };
+  }
+}
+
+export function saveAutoBackupConfig(config: AutoBackupConfig): void {
+  try {
+    localStorage.setItem(AUTO_BACKUP_KEY, JSON.stringify(config));
+  } catch (err) {
+    console.error('Error saving auto backup config', err);
+  }
+}
+
+export function generateAutoBackupPoint(): void {
+  try {
+    const config = getAutoBackupConfig();
+    if (!config.enabled) return;
+
+    // Get active customers and transactions
+    const customers = getCustomers();
+    const transactions = getTransactions();
+
+    const dataToSave = {
+      meta: {
+        exportedAt: new Date().toISOString(),
+        system: 'Debt Ledger Simplified Platform',
+        version: '2026.1',
+        isAutoBackup: true
+      },
+      customers,
+      transactions,
+      users: getUsers(),
+      databaseConfig: getDatabaseConfig()
+    };
+
+    const dataString = JSON.stringify(dataToSave);
+    const sizeInKb = (encodeURIComponent(dataString).length / 1024).toFixed(1);
+
+    const { filename } = getArabicDayAndDate(true);
+    const displayName = config.renameWithDateTime ? `${filename}` : `نسخة_احتياطية_مجدولة_${Date.now()}`;
+
+    const newPoint = {
+      id: 'bp_' + Date.now(),
+      name: displayName,
+      timestamp: new Date().toISOString(),
+      size: `${sizeInKb} KB`,
+      customersCount: customers.length,
+      transactionsCount: transactions.length,
+      data: dataString
+    };
+
+    // Keep only last 10 backup points to prevent LocalStorage bloat
+    const updatedPoints = [newPoint, ...config.autoRestorePoints].slice(0, 10);
+    
+    config.autoRestorePoints = updatedPoints;
+    config.lastBackupTime = new Date().toISOString();
+    
+    saveAutoBackupConfig(config);
+  } catch (error) {
+    console.error('Failed to generate auto backup point', error);
   }
 }

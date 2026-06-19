@@ -1,0 +1,31 @@
+{
+  "$schema": "https://ai.studio/schemas/firebase-blueprint.v1.json",
+  "collections": {
+    "customers": {
+      "id": "string",
+      "name": "string",
+      "phone": "string",
+      "email": "string?",
+      "address": "string?",
+      "notes": "string?",
+      "createdAt": "string"
+    },
+    "transactions": {
+      "id": "string",
+      "customerId": "string",
+      "type": "string",
+      "amount": "number",
+      "date": "string",
+      "description": "string",
+      "createdAt": "string",
+      "createdBy": "string?"
+    },
+    "users": {
+      "id": "string",
+      "username": "string",
+      "fullName": "string",
+      "role": "string",
+      "createdAt": "string"
+    }
+  }
+}

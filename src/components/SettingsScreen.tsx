@@ -7,15 +7,22 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Database, Sliders, Save, RefreshCw, FileJson, 
   Download, Upload, Users, UserPlus, Trash2, Shield, 
-  CheckCircle2, AlertTriangle, Key, Lock, ArrowLeft 
+  CheckCircle2, AlertTriangle, Key, Lock, ArrowLeft,
+  Calendar, Clock, History, RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, DatabaseConfig, Customer, Transaction, AccountantPermissions } from '../types';
+import { User, DatabaseConfig, Customer, Transaction, AccountantPermissions, AutoBackupConfig, AutoBackupRestorePoint } from '../types';
 import { 
   getUsers, saveUsers, getDatabaseConfig, saveDatabaseConfig,
   getCustomers, saveCustomers, getTransactions, saveTransactions,
-  getAccountantPermissions, saveAccountantPermissions
+  getAccountantPermissions, saveAccountantPermissions,
+  getArabicDayAndDate, getAutoBackupConfig, saveAutoBackupConfig, generateAutoBackupPoint
 } from '../localStorage';
+import {
+  isFirebaseConfigured, getFirebaseSyncMeta, saveFirebaseSyncMeta,
+  pushDataToFirestore, pullDataFromFirestore
+} from '../firebase';
+import { Cloud, CloudLightning, CloudOff, RefreshCcw } from 'lucide-react';
 
 interface SettingsScreenProps {
   currentUser: string;
@@ -63,6 +70,11 @@ export default function SettingsScreen({
   const [isTestingConn, setIsTestingConn] = useState(false);
   const [connLogs, setConnLogs] = useState<string[]>([]);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  
+  // Firebase States
+  const [firebaseMeta, setFirebaseMeta] = useState(getFirebaseSyncMeta());
+  const [isSyncingFirebase, setIsSyncingFirebase] = useState(false);
+  const [firebaseSyncResult, setFirebaseSyncResult] = useState<{ success: boolean; message: string } | null>(null);
   const [confirmDeleteUserId, setConfirmDeleteUserId] = useState<string | null>(null);
   const [newFullName, setNewFullName] = useState('');
   const [newUsername, setNewUsername] = useState('');
@@ -184,6 +196,109 @@ export default function SettingsScreen({
     }, 400);
   };
 
+  // Firebase Handlers
+  const handleToggleFirebaseConnection = (connected: boolean) => {
+    setFirebaseSyncResult(null);
+    const updated = { ...firebaseMeta, connected };
+    setFirebaseMeta(updated);
+    saveFirebaseSyncMeta(updated);
+  };
+
+  const handleToggleFirebaseAutoSync = (autoSyncEnabled: boolean) => {
+    setFirebaseSyncResult(null);
+    const updated = { ...firebaseMeta, autoSyncEnabled };
+    setFirebaseMeta(updated);
+    saveFirebaseSyncMeta(updated);
+    
+    // Changing the state of dbConfig to reflect we are on 'cloud' or sync mode
+    if (autoSyncEnabled && firebaseMeta.connected) {
+      const updatedConfig: DatabaseConfig = {
+        ...dbConfig,
+        type: 'cloud',
+        status: 'connected',
+        lastSync: new Date().toISOString()
+      };
+      setDbConfig(updatedConfig);
+      saveDatabaseConfig(updatedConfig);
+    }
+  };
+
+  const handlePushToFirebase = async () => {
+    setIsSyncingFirebase(true);
+    setFirebaseSyncResult(null);
+    try {
+      const customers = getCustomers();
+      const transactions = getTransactions();
+      const usersList = getUsers();
+
+      await pushDataToFirestore(customers, transactions, usersList);
+
+      const updated = { 
+        ...firebaseMeta, 
+        lastSyncAt: new Date().toISOString() 
+      };
+      setFirebaseMeta(updated);
+      saveFirebaseSyncMeta(updated);
+
+      setFirebaseSyncResult({
+        success: true,
+        message: 'تم بنجاح رفع كافة بيانات العملاء والديون والعمليات من الذاكرة المحلية إلى سحابة Firestore!'
+      });
+    } catch (err: any) {
+      console.error(err);
+      setFirebaseSyncResult({
+        success: false,
+        message: `فشل رفع البيانات: ${err?.message || 'مشكلة في الشبكة أو الصلاحيات.'}`
+      });
+    } finally {
+      setIsSyncingFirebase(false);
+    }
+  };
+
+  const handlePullFromFirebase = async () => {
+    setIsSyncingFirebase(true);
+    setFirebaseSyncResult(null);
+    if (!confirm('هل أنت متأكد من رغبتك في سحب البيانات من السحابة؟ سيقوم هذا باستبدال كامل قائمة الديون والعملاء والعمليات المحلية الحالية بالبيانات القادمة من Firestore.')) {
+      setIsSyncingFirebase(false);
+      return;
+    }
+
+    try {
+      const { customers, transactions, users: cloudUsers } = await pullDataFromFirestore();
+
+      saveCustomers(customers);
+      saveTransactions(transactions);
+      if (cloudUsers && cloudUsers.length > 0) {
+        saveUsers(cloudUsers);
+        setUsers(cloudUsers);
+      }
+
+      const updated = { 
+        ...firebaseMeta, 
+        lastSyncAt: new Date().toISOString() 
+      };
+      setFirebaseMeta(updated);
+      saveFirebaseSyncMeta(updated);
+
+      setFirebaseSyncResult({
+        success: true,
+        message: 'تم مزامنة وسحب كافة السجلات وقوائم التوريد من Firestore بنجاح!'
+      });
+
+      refreshStats();
+      onRefreshData();
+    } catch (err: any) {
+      console.error(err);
+      setFirebaseSyncResult({
+        success: false,
+        message: `فشل سحب البيانات: ${err?.message || 'مشكلة في الاتصال أو قواعد الحماية.'}`
+      });
+    } finally {
+      setIsSyncingFirebase(false);
+    }
+  };
+
+
 
   // Handle adding a new user
   const handleAddUser = (e: React.FormEvent) => {
@@ -252,6 +367,73 @@ export default function SettingsScreen({
     refreshStats();
   };
 
+  // AUTO BACKUP STATE AND HANDLERS
+  const [autoBackupConfig, setAutoBackupConfig] = useState<AutoBackupConfig>(getAutoBackupConfig());
+
+  const handleToggleAutoBackup = (enabled: boolean) => {
+    const updated = { ...autoBackupConfig, enabled };
+    setAutoBackupConfig(updated);
+    saveAutoBackupConfig(updated);
+    if (enabled) {
+      generateAutoBackupPoint();
+      setAutoBackupConfig(getAutoBackupConfig());
+      setBackupSuccess('تم تفعيل النسخ الاحتياطي التلقائي بنجاح وتوليد نقطة استعادة فورية!');
+    } else {
+      setBackupSuccess('تم إيقاف النسخ الاحتياطي التلقائي مؤقتاً.');
+    }
+  };
+
+  const handleUpdateBackupInterval = (interval: AutoBackupConfig['interval']) => {
+    const updated = { ...autoBackupConfig, interval };
+    setAutoBackupConfig(updated);
+    saveAutoBackupConfig(updated);
+    setBackupSuccess('تم حفظ جدول تكرار النسخ الاحتياطي بنجاح!');
+  };
+
+  const handleToggleRenameDate = (renameWithDateTime: boolean) => {
+    const updated = { ...autoBackupConfig, renameWithDateTime };
+    setAutoBackupConfig(updated);
+    saveAutoBackupConfig(updated);
+    setBackupSuccess(renameWithDateTime ? 'تم تفعيل خيار دمج اليوم والتاريخ الفعلي في اسم ملف النسخ الاحتياطي.' : 'تم تعيين اسم افتراضي تقليدي لملف النسخ.');
+  };
+
+  const handleTriggerManualLocalBackup = () => {
+    generateAutoBackupPoint();
+    setAutoBackupConfig(getAutoBackupConfig());
+    setBackupSuccess('تم توليد وحفظ نقطة استعادة محلية فورية في ذاكرة المتصفح بنجاح!');
+  };
+
+  const handleRestoreFromLocalPoint = (point: AutoBackupRestorePoint) => {
+    if (confirm(`تحذير هام: هل أنت متأكد من رغبتك في استعادة البيانات من نقطة الاستعادة المحلية [${point.name}]؟ سيقوم هذا باستبدال كامل قائمة الديون والعملاء والعمليات الحالية بمحتوى نقطة الاستعادة هذه.`)) {
+      try {
+        const parsedData = JSON.parse(point.data);
+        saveCustomers(parsedData.customers);
+        saveTransactions(parsedData.transactions);
+        if (parsedData.users && parsedData.users.length > 0) {
+          saveUsers(parsedData.users);
+          setUsers(parsedData.users);
+        }
+        if (parsedData.databaseConfig) {
+          saveDatabaseConfig(parsedData.databaseConfig);
+          setDbConfig(parsedData.databaseConfig);
+        }
+        setBackupSuccess(`تهانينا! تم بنجاح استرداد الحالة المتكاملة واستعادة السجلات من النقطة المحفوظة بنشاط (${point.name}).`);
+        refreshStats();
+        onRefreshData();
+      } catch (err) {
+        setBackupError('فشل تحليل بيانات نقطة الاستعادة! المستند قد يكون متضرراً.');
+      }
+    }
+  };
+
+  const handleDeleteRestorePoint = (pointId: string) => {
+    const filteredPoints = autoBackupConfig.autoRestorePoints.filter(p => p.id !== pointId);
+    const updated = { ...autoBackupConfig, autoRestorePoints: filteredPoints };
+    setAutoBackupConfig(updated);
+    saveAutoBackupConfig(updated);
+    setBackupSuccess('تم حذف نقطة الاستعادة بنجاح.');
+  };
+
   // PRO EXPORT BACKUP
   const handleExportBackup = () => {
     setBackupSuccess('');
@@ -274,8 +456,16 @@ export default function SettingsScreen({
       const downloadAnchor = document.createElement('a');
       downloadAnchor.setAttribute("href", dataStr);
       
-      const fileDateString = new Date().toISOString().split('T')[0];
-      downloadAnchor.setAttribute("download", `نسخة_احتياطية_المستندات_المالية_${fileDateString}.json`);
+      let downloadName = '';
+      if (autoBackupConfig.renameWithDateTime) {
+        const { filename } = getArabicDayAndDate(true);
+        downloadName = `${filename}.json`;
+      } else {
+        const fileDateString = new Date().toISOString().split('T')[0];
+        downloadName = `نسخة_احتياطية_المستندات_المالية_${fileDateString}.json`;
+      }
+      
+      downloadAnchor.setAttribute("download", downloadName);
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
@@ -788,6 +978,138 @@ export default function SettingsScreen({
                     </span>
                   </div>
                 </form>
+
+                {/* Firestore Cloud Integration Section */}
+                <div className="border-t border-slate-150 pt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+                        <Cloud className="w-4.5 h-4.5 text-indigo-600" />
+                        <span>رابط ومزامنة سحابة Firebase Firestore</span>
+                      </h4>
+                      <p className="text-slate-400 text-[11px] mt-0.5">
+                        قم بتوصيل وتفعيل خادم مستودع البيانات السحابي لإدارة السجلات والديون والعملاء في السحابة ومزامنتها لحظياً.
+                      </p>
+                    </div>
+
+                    <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded border border-indigo-150">
+                      مستعد سحابياً 💻
+                    </span>
+                  </div>
+
+                  {!isFirebaseConfigured() ? (
+                    <div className="p-4 rounded-xl border border-dashed border-rose-200 bg-rose-50/50 text-rose-800 text-xs flex items-start gap-2.5">
+                      <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold">مفاتيح التهيئة السحابية غير مجهزة!</p>
+                        <p className="text-[10px] mt-0.5 text-rose-600">يرجى التأكد من تشغيل التكوين التلقائي وإتمام ربط Firestore من تبويبة إعدادات النظام.</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Configuration status list */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-55 p-4 rounded-xl border border-slate-150 text-xs leading-relaxed">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-1.5 text-slate-600">
+                            <span className="font-bold">معرّف المشروع (Project ID):</span>
+                            <span className="font-mono bg-white px-1.5 py-0.5 border border-slate-100 rounded text-slate-700 select-all">sinuous-entropy-jhh41</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-slate-600">
+                            <span className="font-bold">رصيد الاتصال (API Host):</span>
+                            <span className="font-mono text-slate-500">firestore.googleapis.com</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          {/* Sync toggle buttons */}
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-700">تفعيل خادم الربط السحابي:</span>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleFirebaseConnection(!firebaseMeta.connected)}
+                              className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                firebaseMeta.connected ? 'bg-indigo-600' : 'bg-slate-200'
+                              }`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                  firebaseMeta.connected ? '-translate-x-5' : 'translate-x-0'
+                               }`}
+                              />
+                            </button>
+                          </div>
+
+                          {firebaseMeta.connected && (
+                            <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                              <span className="font-bold text-slate-700">المزامنة التلقائية الفورية المستمرة (Auto-Sync):</span>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleFirebaseAutoSync(!firebaseMeta.autoSyncEnabled)}
+                                className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                  firebaseMeta.autoSyncEnabled ? 'bg-emerald-600' : 'bg-slate-200'
+                                }`}
+                              >
+                                <span
+                                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                    firebaseMeta.autoSyncEnabled ? '-translate-x-5' : 'translate-x-0'
+                                  }`}
+                                />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {firebaseMeta.connected ? (
+                        <div className="space-y-3">
+                          <div className="flex flex-col sm:flex-row items-center gap-3">
+                            <button
+                              type="button"
+                              disabled={isSyncingFirebase}
+                              onClick={handlePushToFirebase}
+                              className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer"
+                            >
+                              {isSyncingFirebase ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CloudLightning className="w-4 h-4" />}
+                              <span>رفع وتصدير البيانات الحالية لـ Firestore 🔼</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={isSyncingFirebase}
+                              onClick={handlePullFromFirebase}
+                              className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer"
+                            >
+                              {isSyncingFirebase ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCcw className="w-3.5 h-3.5" />}
+                              <span>مزامنة وسحب البيانات من Firestore لقراءة السجلات 🔽</span>
+                            </button>
+                          </div>
+
+                          {firebaseMeta.lastSyncAt && (
+                            <div className="text-[10px] text-slate-400 flex items-center gap-1 font-mono">
+                              <span>◀ آخر مزامنة ناجحة تمت في:</span>
+                              <span>{new Date(firebaseMeta.lastSyncAt).toLocaleString('ar-EG')}</span>
+                            </div>
+                          )}
+
+                          {firebaseSyncResult && (
+                            <motion.div 
+                              initial={{ opacity: 0, y: 5 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className={`p-3 rounded-lg border text-xs font-bold ${firebaseSyncResult.success ? 'bg-emerald-50 text-emerald-800 border-emerald-100' : 'bg-rose-50 text-rose-800 border-rose-100'}`}
+                            >
+                              {firebaseSyncResult.message}
+                            </motion.div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-150 text-slate-400 text-xs text-center">
+                          🔴 تم فصل الربط السحابي بـ Firestore. يمكنك تفعيل الخيار أعلاه لفتح منافذ المزامنة وحفظ السجلات.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
               </motion.div>
             )}
 
@@ -894,6 +1216,167 @@ export default function SettingsScreen({
                         <span>اختيار ملف JSON المعتمد</span>
                       </button>
                     </div>
+                  </div>
+                </div>
+
+                {/* 2.1. New Automated Backup Scheduler Section */}
+                <div className="border-t border-slate-100 pt-6 space-y-6">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                      <h4 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-indigo-600" />
+                        <span>جدولة النسخ الاحتياطي التلقائي (Auto-Backup Scheduler)</span>
+                      </h4>
+                      <p className="text-slate-400 text-[11px] mt-0.5">
+                        قم بتهيئة وحماية بياناتك مالياً وبشكل دوري ومستمر داخل مساحة التخزين الآمنة للمتصفح دون أي مجهود يدوي.
+                      </p>
+                    </div>
+                    
+                    {/* Toggle switch */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAutoBackup(!autoBackupConfig.enabled)}
+                      className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        autoBackupConfig.enabled ? 'bg-indigo-600' : 'bg-slate-200'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          autoBackupConfig.enabled ? '-translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {autoBackupConfig.enabled && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-150"
+                    >
+                      {/* Interval selector */}
+                      <div className="space-y-2">
+                        <label className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>تحديد معدل تكرار النسخ الاحتياطي التلقائي:</span>
+                        </label>
+                        <select
+                          value={autoBackupConfig.interval}
+                          onChange={(e) => handleUpdateBackupInterval(e.target.value as any)}
+                          className="w-full text-xs rounded-lg border-slate-250 p-2 font-semibold bg-white cursor-pointer"
+                        >
+                          <option value="every_change">🔄 فورياً عند كل حركة أو تعديل بالبيانات (موصى به لثبات الدفتر)</option>
+                          <option value="hourly">⏰ كل ساعة واحدة تلقائياً</option>
+                          <option value="daily">📅 دورياً مرة واحدة كل يوم</option>
+                          <option value="weekly">📆 دورياً مرة واحدة كل أسبوع</option>
+                        </select>
+                      </div>
+
+                      {/* Rename toggle and preview */}
+                      <div className="space-y-2 flex flex-col justify-between">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-slate-600 flex items-center gap-1 cursor-pointer select-none" onClick={() => handleToggleRenameDate(!autoBackupConfig.renameWithDateTime)}>
+                            <input 
+                              type="checkbox" 
+                              checked={autoBackupConfig.renameWithDateTime}
+                              onChange={(e) => handleToggleRenameDate(e.target.checked)}
+                              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 ml-1.5"
+                            />
+                            <span>تفعيل إعادة تسمية الملف باليوم والتاريخ العربي الفعلي</span>
+                          </label>
+                        </div>
+                        
+                        <div className="bg-white px-3 py-2 rounded-lg border border-slate-100 text-[10px] text-slate-500 flex items-center gap-1.5 leading-snug">
+                          <span className="font-bold text-indigo-600 shrink-0">معاينة التسمية المعتمدة:</span>
+                          <span className="font-mono text-[9px] truncate bg-slate-50 px-1 py-0.5 rounded border border-slate-100" dir="ltr">
+                            {getArabicDayAndDate(true).filename}.json
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Restore Points History */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <History className="w-4 h-4 text-emerald-600" />
+                        <span>النقاط الفورية المحفوظة تلقائياً في المتصفح</span>
+                      </h5>
+                      
+                      <button
+                        type="button"
+                        onClick={handleTriggerManualLocalBackup}
+                        className="py-1 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-100 rounded-lg text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>إنشاء نقطة استعادة فورية الآن 🚀</span>
+                      </button>
+                    </div>
+
+                    {autoBackupConfig.autoRestorePoints.length === 0 ? (
+                      <div className="text-center py-6 px-4 border border-dashed border-slate-200 rounded-xl bg-slate-50 text-slate-400 text-xs">
+                        ⚠️ لا تتوفر أي نقاط استعادة محفوظة محلياً في ذاكرة المتصفح حتى الآن. قم بالضغط على "إنشاء نقطة استعادة" لتسجيل نسخة فورية.
+                      </div>
+                    ) : (
+                      <div className="border border-slate-150 rounded-xl overflow-hidden bg-white max-h-60 overflow-y-auto">
+                        <table className="w-full text-right text-xs">
+                          <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100 sticky top-0 bg-slate-50">
+                            <tr>
+                              <th className="py-2.5 px-3 font-semibold text-slate-500">اسم نقطة النسخ المتراكم</th>
+                              <th className="py-2.5 px-3 font-semibold text-slate-500">تاريخ وساعة المزامنة</th>
+                              <th className="py-2.5 px-3 font-semibold text-slate-500">العملاء / القيود</th>
+                              <th className="py-2.5 px-3 font-semibold text-slate-500 text-center">الإجراء المتاح</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-medium text-[11px]">
+                            {autoBackupConfig.autoRestorePoints.map((point) => (
+                              <tr key={point.id} className="hover:bg-slate-50/50 transition">
+                                <td className="py-3 px-3 font-bold text-slate-800 truncate max-w-[200px]" title={point.name}>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                                    <span>{point.name}</span>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-3 text-slate-550 font-mono">
+                                  {new Date(point.timestamp).toLocaleString('ar-EG', {
+                                    year: 'numeric',
+                                    month: 'numeric',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    second: '2-digit'
+                                  })}
+                                </td>
+                                <td className="py-3 px-3 font-mono text-slate-600">
+                                  {point.customersCount} عميل / {point.transactionsCount} قيد
+                                </td>
+                                <td className="py-3 px-3 text-center flex items-center justify-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRestoreFromLocalPoint(point)}
+                                    className="py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-[9px] font-bold flex items-center gap-1 transition cursor-pointer shadow-sm shadow-emerald-100"
+                                    title="استرجاع كافة البيانات والسجلات من هذه النقطة"
+                                  >
+                                    <RotateCcw className="w-3 h-3" />
+                                    <span>استعادة بنقرة</span>
+                                  </button>
+                                  
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteRestorePoint(point.id)}
+                                    className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-md transition cursor-pointer"
+                                    title="حذف هذه النقطة من ذاكرة المتصفح يدوياً"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 </div>
               </motion.div>

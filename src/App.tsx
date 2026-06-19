@@ -8,7 +8,8 @@ import { Customer, Transaction, AuthState, TransactionType, AccountantPermission
 import { 
   getCustomers, getTransactions, saveCustomers, saveTransactions, 
   getAuthState, saveAuthState, getAccountantPermissions, saveAccountantPermissions,
-  getUsers, getTheme, saveTheme
+  getUsers, getTheme, saveTheme,
+  getAutoBackupConfig, generateAutoBackupPoint
 } from './localStorage';
 import LoginScreen from './components/LoginScreen';
 import Header from './components/Header';
@@ -21,6 +22,8 @@ import {
   Trash2, Edit, ArrowLeftRight, CheckCircle2, AlertTriangle, UserPlus, BookOpen, Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { saveDocFirestore, deleteDocFirestore } from './firebase';
+
 
 export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(getTheme());
@@ -94,6 +97,45 @@ export default function App() {
     handleRefreshData();
   }, []);
 
+  // AUTO BACKUP TRIGGERS & PERIODIC SCHEDULER CHECK
+  const triggerImmediateChangeBackup = () => {
+    try {
+      const config = getAutoBackupConfig();
+      if (config.enabled && config.interval === 'every_change') {
+        generateAutoBackupPoint();
+      }
+    } catch (e) {
+      console.error('Failed to trigger immediate change backup', e);
+    }
+  };
+
+  useEffect(() => {
+    try {
+      const config = getAutoBackupConfig();
+      if (!config.enabled || config.interval === 'every_change' || config.interval === 'manual') return;
+
+      const lastBackup = config.lastBackupTime ? new Date(config.lastBackupTime).getTime() : 0;
+      const now = Date.now();
+      const diffMs = now - lastBackup;
+
+      let intervalMs = 0;
+      if (config.interval === 'hourly') {
+        intervalMs = 60 * 60 * 1000;
+      } else if (config.interval === 'daily') {
+        intervalMs = 24 * 60 * 60 * 1000;
+      } else if (config.interval === 'weekly') {
+        intervalMs = 7 * 24 * 60 * 60 * 1000;
+      }
+
+      if (diffMs >= intervalMs) {
+        console.log(`Periodic backup triggered by schedule: [${config.interval}]`);
+        generateAutoBackupPoint();
+      }
+    } catch (e) {
+      console.error('Periodic backup check error', e);
+    }
+  }, [customers, transactions]);
+
   // Handle Login success
   const handleLoginSuccess = (username: string, role: 'admin' | 'accountant') => {
     const newState = { isAuthenticated: true, username, role };
@@ -108,7 +150,7 @@ export default function App() {
     saveAuthState(newState);
   };
 
-  // Delete Customer and their associated transactions safely
+    // Delete Customer and their associated transactions safely
   const handleDeleteCustomer = (id: string) => {
     if (!canDeleteCustomer) {
       alert('عذراً! لا تملك صلاحية حذف العملاء وسجلاتهم. يرجى مراجعة المسؤول.');
@@ -120,6 +162,16 @@ export default function App() {
     setTransactions(freshTransactions);
     saveCustomers(freshCustomers);
     saveTransactions(freshTransactions);
+    triggerImmediateChangeBackup();
+
+    // Mirror to Firestore
+    deleteDocFirestore('customers', id).catch(err => console.error(err));
+    transactions.forEach(t => {
+      if (t.customerId === id) {
+        deleteDocFirestore('transactions', t.id).catch(err => console.error(err));
+      }
+    });
+
     if (selectedCustomerId === id) {
       setSelectedCustomerId(null);
     }
@@ -141,6 +193,12 @@ export default function App() {
       setCustomers(updated);
       saveCustomers(updated);
       setEditingCustomer(null);
+      triggerImmediateChangeBackup();
+
+      const targetCustomer = updated.find(c => c.id === editingCustomer.id);
+      if (targetCustomer) {
+        saveDocFirestore('customers', editingCustomer.id, targetCustomer).catch(err => console.error(err));
+      }
     } else {
       // Adding Mode
       const newId = 'cust_' + Date.now();
@@ -153,6 +211,8 @@ export default function App() {
       const revisedCustomers = [...customers, newCustomer];
       setCustomers(revisedCustomers);
       saveCustomers(revisedCustomers);
+      
+      saveDocFirestore('customers', newId, newCustomer).catch(err => console.error(err));
 
       // Add auto initial balance transaction if requested
       if (initialBalance && initialBalance.amount > 0) {
@@ -178,8 +238,11 @@ export default function App() {
           const revisedTransactions = [...transactions, initialTx];
           setTransactions(revisedTransactions);
           saveTransactions(revisedTransactions);
+
+          saveDocFirestore('transactions', initialTx.id, initialTx).catch(err => console.error(err));
         }
       }
+      triggerImmediateChangeBackup();
     }
   };
 
@@ -202,6 +265,9 @@ export default function App() {
     const revisedTransactions = [...transactions, newTx];
     setTransactions(revisedTransactions);
     saveTransactions(revisedTransactions);
+    triggerImmediateChangeBackup();
+
+    saveDocFirestore('transactions', newTx.id, newTx).catch(err => console.error(err));
   };
 
   // Delete Transaction callback
@@ -213,6 +279,9 @@ export default function App() {
     const revisedTransactions = transactions.filter(t => t.id !== txId);
     setTransactions(revisedTransactions);
     saveTransactions(revisedTransactions);
+    triggerImmediateChangeBackup();
+
+    deleteDocFirestore('transactions', txId).catch(err => console.error(err));
   };
 
   // Calculate current balances of each customer reactively
