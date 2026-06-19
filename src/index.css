@@ -7,125 +7,188 @@
 
 body {
   font-family: var(--font-sans);
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   background-color: #f8fafc; /* bg-slate-50 */
 }
 
-/* Stunning Dark Mode Global Overrides */
+/* Stunning Dark Mode Global Overrides - Obsidian Space Theme */
 html.dark {
   color-scheme: dark;
 }
 
 html.dark body {
-  background-color: #0b0f19; /* deep cosmic slate */
-  color: #f1f5f9;
+  background-color: #05070f; /* Deep galactic obsidian black */
+  color: #f8fafc;
 }
 
+/* Card Overrides - Premium glassy dark card background with violet/slate border */
 html.dark .bg-white {
-  background-color: #121b2e !important; /* premium navy-slate cards */
-  border-color: #1e293b !important;
+  background-color: #0c0f1d !important; /* Premium Obsidian Navy */
+  border-color: #1a1f35 !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.45), 0 2px 8px -1px rgba(99, 102, 241, 0.03) !important;
 }
 
+/* Text Hierarchies for High Contrast & Elegant Readability */
 html.dark .text-slate-900,
-html.dark .text-slate-800 {
-  color: #f8fafc !important;
+html.dark .text-slate-800,
+html.dark .text-gray-900,
+html.dark .text-gray-800 {
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
+html.dark .text-slate-750,
 html.dark .text-slate-700,
-html.dark .text-slate-650 {
-  color: #cbd5e1 !important;
+html.dark .text-slate-650,
+html.dark .text-gray-700 {
+  color: #e2e8f0 !important; /* Rich silver */
 }
 
 html.dark .text-slate-600,
-html.dark .text-slate-500 {
-  color: #94a3b8 !important;
+html.dark .text-slate-500,
+html.dark .text-gray-600,
+html.dark .text-gray-500 {
+  color: #94a3b8 !important; /* Muted atmospheric gray */
 }
 
-html.dark .text-slate-400 {
-  color: #64748b !important;
+html.dark .text-slate-400,
+html.dark .text-gray-400 {
+  color: #64748b !important; /* Deep slate details */
 }
 
+/* Background Overrides for Submenus and Sidebar layout list items */
 html.dark .bg-slate-50,
-html.dark .bg-slate-100 {
-  background-color: #0b0f19 !important;
-  border-color: #1e293b !important;
+html.dark .bg-slate-100,
+html.dark .bg-gray-50,
+html.dark .bg-gray-100 {
+  background-color: #070914 !important; /* Shaded dark area */
+  border-color: #1a1f35 !important;
 }
 
-html.dark .bg-slate-200 {
-  background-color: #1e293b !important;
+html.dark .bg-slate-200,
+html.dark .bg-gray-200 {
+  background-color: #1e253f !important;
 }
 
+/* Fine-tune borders to match the dark cybernetic aesthetic */
 html.dark .border-slate-50,
 html.dark .border-slate-100,
 html.dark .border-slate-150,
-html.dark .border-slate-200 {
-  border-color: #1e293b !important;
+html.dark .border-slate-200,
+html.dark .border-gray-100,
+html.dark .border-gray-200 {
+  border-color: #1a1f35 !important;
 }
 
+/* Interactive States & Hovers */
 html.dark .hover\:bg-slate-50:hover,
-html.dark .hover\:bg-slate-100:hover {
-  background-color: #1e293b !important;
+html.dark .hover\:bg-slate-100:hover,
+html.dark .hover\:bg-gray-50:hover,
+html.dark .hover\:bg-gray-100:hover {
+  background-color: #13182b !important;
+  color: #ffffff !important;
 }
 
-/* Safe Input Overrides for Dark Mode */
+/* Safe Input Overrides for Dark Mode - Extremely Clean, Rich Black */
 html.dark input, 
 html.dark select, 
 html.dark textarea {
-  background-color: #070a14 !important;
+  background-color: #05070f !important;
   color: #ffffff !important;
-  border-color: #1e293b !important;
+  border-color: #1a1f35 !important;
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.4) !important;
 }
 
 html.dark input:focus, 
 html.dark select:focus, 
 html.dark textarea:focus {
   border-color: #6366f1 !important;
-  background-color: #0b0f19 !important;
+  background-color: #0c0f1d !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15), inset 0 2px 4px 0 rgba(0, 0, 0, 0.4) !important;
 }
 
 html.dark input::placeholder {
   color: #475569 !important;
 }
 
-/* Header summary metrics blocks */
+/* Header & Metric Blocks - Elegant Neon-Vapor Transparency Overrides */
 html.dark .bg-emerald-50,
 html.dark .bg-emerald-500\/10 {
-  background-color: rgba(16, 185, 129, 0.1) !important;
+  background-color: rgba(16, 185, 129, 0.08) !important;
+  border-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+html.dark .text-emerald-600,
+html.dark .text-emerald-700 {
+  color: #34d399 !important; /* Emerald Neon glow */
 }
 
 html.dark .bg-rose-50,
 html.dark .bg-rose-500\/10 {
-  background-color: rgba(244, 63, 94, 0.1) !important;
+  background-color: rgba(244, 63, 94, 0.08) !important;
+  border-color: rgba(244, 63, 94, 0.15) !important;
+}
+
+html.dark .text-rose-600,
+html.dark .text-rose-700 {
+  color: #fb7185 !important; /* Rose elegant alert */
 }
 
 html.dark .bg-indigo-50,
 html.dark .bg-indigo-500\/10 {
-  background-color: rgba(99, 102, 241, 0.1) !important;
+  background-color: rgba(99, 102, 241, 0.08) !important;
+  border-color: rgba(99, 102, 241, 0.15) !important;
+}
+
+html.dark .text-indigo-600,
+html.dark .text-indigo-700 {
+  color: #818cf8 !important; /* Light royal indigo */
 }
 
 html.dark .border-emerald-100 {
-  border-color: rgba(16, 185, 129, 0.2) !important;
+  border-color: rgba(16, 185, 129, 0.25) !important;
 }
 
 html.dark .border-rose-100 {
-  border-color: rgba(244, 63, 94, 0.2) !important;
+  border-color: rgba(244, 63, 94, 0.25) !important;
 }
 
 html.dark .border-indigo-100 {
-  border-color: rgba(99, 102, 241, 0.2) !important;
+  border-color: rgba(99, 102, 241, 0.25) !important;
 }
 
 /* Modals & settings overlay */
 html.dark .bg-slate-900\/60 {
-  background-color: rgba(0, 0, 0, 0.8) !important;
+  background-color: rgba(3, 4, 10, 0.85) !important;
+  backdrop-filter: blur(12px);
+}
+
+/* Custom Table Row Stripes for Dark Mode */
+html.dark tr.bg-slate-50\/40,
+html.dark .bg-slate-50\/50 {
+  background-color: rgba(12, 15, 29, 0.4) !important;
+}
+
+/* Checkbox and toggle adjustments */
+html.dark input[type="checkbox"] {
+  accent-color: #6366f1;
+}
+
+/* Action button overlays */
+html.dark .hover\:shadow-md:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(99, 102, 241, 0.04) !important;
 }
 
 /* Scrollbars */
 html.dark ::-webkit-scrollbar-track {
-  background: #0b0f19;
+  background: #05070f;
 }
 
 html.dark ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #1a1f35;
   border-radius: 4px;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #272f4e;
 }
