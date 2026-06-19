@@ -1,0 +1,6 @@
+{
+  "name": "برنامج تسجيل الديون",
+  "description": "برنامج بسيط لتسجيل الديون (مدين ودائن) مع كشف حساب لكل عميل وشاشة دخول بسيطة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
