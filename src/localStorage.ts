@@ -3,11 +3,33 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Customer, Transaction } from './types';
+import { Customer, Transaction, User, DatabaseConfig, AccountantPermissions } from './types';
 
 const CUSTOMERS_KEY = 'debt_app_customers_v1';
 const TRANSACTIONS_KEY = 'debt_app_transactions_v1';
 const AUTH_KEY = 'debt_app_auth_v1';
+const USERS_KEY = 'debt_app_users_v1';
+const DB_CONFIG_KEY = 'debt_app_db_config_v1';
+const PERMISSIONS_KEY = 'debt_app_accountant_perms_v1';
+
+const DEFAULT_USERS: User[] = [
+  {
+    id: 'u1',
+    username: 'admin',
+    password: '123',
+    fullName: 'المدير العام',
+    role: 'admin',
+    createdAt: '2026-05-01T10:00:00.000Z'
+  },
+  {
+    id: 'u2',
+    username: 'accountant',
+    password: '123',
+    fullName: 'المحاسب المسؤول',
+    role: 'accountant',
+    createdAt: '2026-05-01T10:00:00.000Z'
+  }
+];
 
 const DEFAULT_CUSTOMERS: Customer[] = [
   {
@@ -163,7 +185,7 @@ export function saveTransactions(transactions: Transaction[]): void {
   }
 }
 
-export function getAuthState(): { isAuthenticated: boolean; username: string } {
+export function getAuthState(): { isAuthenticated: boolean; username: string; role?: 'admin' | 'accountant' } {
   try {
     const data = localStorage.getItem(AUTH_KEY);
     if (data) {
@@ -175,10 +197,104 @@ export function getAuthState(): { isAuthenticated: boolean; username: string } {
   return { isAuthenticated: false, username: '' };
 }
 
-export function saveAuthState(state: { isAuthenticated: boolean; username: string }): void {
+export function saveAuthState(state: { isAuthenticated: boolean; username: string; role?: 'admin' | 'accountant' }): void {
   try {
     localStorage.setItem(AUTH_KEY, JSON.stringify(state));
   } catch (e) {
     console.error('Error saving auth state', e);
+  }
+}
+
+export function getUsers(): User[] {
+  try {
+    const data = localStorage.getItem(USERS_KEY);
+    if (!data) {
+      localStorage.setItem(USERS_KEY, JSON.stringify(DEFAULT_USERS));
+      return DEFAULT_USERS;
+    }
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error fetching users', error);
+    return DEFAULT_USERS;
+  }
+}
+
+export function saveUsers(users: User[]): void {
+  try {
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  } catch (error) {
+    console.error('Error saving users', error);
+  }
+}
+
+export function getDatabaseConfig(): DatabaseConfig {
+  try {
+    const data = localStorage.getItem(DB_CONFIG_KEY);
+    if (!data) {
+      const config: DatabaseConfig = {
+        type: 'local',
+        status: 'connected',
+        lastSync: new Date().toISOString()
+      };
+      localStorage.setItem(DB_CONFIG_KEY, JSON.stringify(config));
+      return config;
+    }
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error fetching database config', error);
+    return { type: 'local', status: 'connected' };
+  }
+}
+
+export function saveDatabaseConfig(config: DatabaseConfig): void {
+  try {
+    localStorage.setItem(DB_CONFIG_KEY, JSON.stringify(config));
+  } catch (error) {
+    console.error('Error saving database config', error);
+  }
+}
+
+export function getAccountantPermissions(): AccountantPermissions {
+  try {
+    const data = localStorage.getItem(PERMISSIONS_KEY);
+    if (!data) {
+      const defaultPermissions: AccountantPermissions = {
+        deleteCustomer: false,
+        modifyTransactions: true,
+        viewDbConfig: false,
+        viewBackup: false,
+        viewUsersList: false,
+        viewDashboard: true,
+      };
+      localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(defaultPermissions));
+      return defaultPermissions;
+    }
+    const parsed = JSON.parse(data);
+    return {
+      deleteCustomer: parsed.deleteCustomer ?? false,
+      modifyTransactions: parsed.modifyTransactions ?? true,
+      viewDbConfig: parsed.viewDbConfig ?? false,
+      viewBackup: parsed.viewBackup ?? false,
+      viewUsersList: parsed.viewUsersList ?? false,
+      viewDashboard: parsed.viewDashboard ?? true,
+    };
+  } catch (error) {
+    console.error('Error fetching accountant permissions', error);
+    return { 
+      deleteCustomer: false, 
+      modifyTransactions: true,
+      viewDbConfig: false,
+      viewBackup: false,
+      viewUsersList: false,
+      viewDashboard: true,
+    };
+  }
+}
+
+export function saveAccountantPermissions(perms: AccountantPermissions): void {
+  try {
+    localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(perms));
+  } catch (error) {
+    console.error('Error saving accountant permissions', error);
   }
 }

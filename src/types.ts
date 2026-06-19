@@ -13,6 +13,7 @@ export interface Transaction {
   date: string;
   description: string;
   createdAt: string;
+  createdBy?: string; // اسم المستخدم الذي أضاف القيد
 }
 
 export interface Customer {
@@ -25,7 +26,36 @@ export interface Customer {
   createdAt: string;
 }
 
+export interface User {
+  id: string;
+  username: string;
+  password?: string;
+  fullName: string;
+  role: 'admin' | 'accountant';
+  createdAt: string;
+}
+
+export interface DatabaseConfig {
+  type: 'local' | 'cloud' | 'custom_api';
+  status: 'connected' | 'disconnected' | 'offline';
+  apiUrl?: string;
+  apiKey?: string;
+  projectId?: string;
+  lastSync?: string;
+}
+
+export interface AccountantPermissions {
+  deleteCustomer: boolean;
+  modifyTransactions: boolean;
+  viewDbConfig: boolean;
+  viewBackup: boolean;
+  viewUsersList: boolean;
+  viewDashboard: boolean;
+}
+
 export interface AuthState {
   isAuthenticated: boolean;
   username: string;
+  role?: 'admin' | 'accountant';
+  permissions?: AccountantPermissions;
 }

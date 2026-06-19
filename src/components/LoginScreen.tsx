@@ -4,16 +4,21 @@
  */
 
 import React, { useState } from 'react';
-import { Lock, User, CheckCircle2, ShieldCheck, Key } from 'lucide-react';
+import { Lock, User, CheckCircle2, ShieldCheck, Key, ChevronDown } from 'lucide-react';
 import { motion } from 'motion/react';
+import { getUsers } from '../localStorage';
 
 interface LoginScreenProps {
-  onLoginSuccess: (username: string) => void;
+  onLoginSuccess: (username: string, role: 'admin' | 'accountant') => void;
 }
 
 export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('123456');
+  const [usersList] = useState(() => getUsers());
+  const [username, setUsername] = useState(() => {
+    const activeUsers = getUsers();
+    return activeUsers[0]?.username || 'admin';
+  });
+  const [password, setPassword] = useState(''); // Empty password by default so they must type it
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -32,16 +37,18 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
     setLoading(true);
 
-    // Simple robust login credentials validation
+    // Get the current users list
+    const activeUsers = getUsers();
+
     setTimeout(() => {
-      if (
-        (username.toLowerCase() === 'admin' && password === '123456') ||
-        (username.trim().length >= 3 && password === '123') ||
-        password === 'admin'
-      ) {
-        onLoginSuccess(username.trim());
+      const matchedUser = activeUsers.find(
+        (u) => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password
+      );
+
+      if (matchedUser) {
+        onLoginSuccess(matchedUser.username, matchedUser.role);
       } else {
-        setError('اسم المستخدم أو كلمة المرور غير صحيحة! جرب (admin / 123456)');
+        setError('اسم المستخدم أو كلمة المرور غير صحيحة!');
         setLoading(false);
       }
     }, 600);
@@ -69,18 +76,25 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         <div className="p-8">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">اسم المستخدم</label>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">اسم المستخدم الحسابي</label>
               <div className="relative">
                 <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
                   <User className="w-5 h-5" />
                 </div>
-                <input
-                  type="text"
+                <select
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full pr-11 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition text-sm font-medium text-slate-800"
-                  placeholder="مثال: admin"
-                />
+                  className="w-full pr-11 pl-10 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition text-sm font-bold text-slate-800 appearance-none cursor-pointer"
+                >
+                  {usersList.map((u) => (
+                    <option key={u.id} value={u.username}>
+                      {u.fullName} ({u.role === 'admin' ? 'مدير النظام' : 'محاسب مالي'})
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-450">
+                  <ChevronDown className="w-4 h-4" />
+                </div>
               </div>
             </div>
 
@@ -95,7 +109,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pr-11 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition text-sm font-mono tracking-wider text-slate-800"
-                  placeholder="مثال: 123456"
+                  placeholder="أدخل كلمة مرور الحساب المحدد"
                 />
               </div>
             </div>
@@ -136,10 +150,10 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               </div>
               <div className="grid grid-cols-2 gap-3 text-xs text-slate-500 font-medium leading-relaxed">
                 <div>
-                  <span className="text-slate-400">اسم المستخدم:</span> <code className="bg-white px-1.5 py-0.5 rounded border border-slate-200 font-mono text-indigo-600">admin</code>
+                  <span className="text-slate-400">الحساب:</span> <span className="font-extrabold text-indigo-650">اختر من القائمة أعلاه</span>
                 </div>
                 <div>
-                  <span className="text-slate-400">كلمة المرور:</span> <code className="bg-white px-1.5 py-0.5 rounded border border-slate-200 font-mono text-indigo-600">123456</code>
+                  <span className="text-slate-400">كلمة مرور الأدمن:</span> <code className="bg-white px-1.5 py-0.5 rounded border border-slate-200 font-mono text-indigo-600">123</code>
                 </div>
               </div>
             </div>

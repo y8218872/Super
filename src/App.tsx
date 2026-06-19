@@ -4,32 +4,61 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Customer, Transaction, AuthState, TransactionType } from './types';
+import { Customer, Transaction, AuthState, TransactionType, AccountantPermissions } from './types';
 import { 
   getCustomers, getTransactions, saveCustomers, saveTransactions, 
-  getAuthState, saveAuthState 
+  getAuthState, saveAuthState, getAccountantPermissions, saveAccountantPermissions,
+  getUsers
 } from './localStorage';
 import LoginScreen from './components/LoginScreen';
 import Header from './components/Header';
 import CustomerModal from './components/CustomerModal';
 import TransactionModal from './components/TransactionModal';
 import CustomerStatement from './components/CustomerStatement';
+import SettingsScreen from './components/SettingsScreen';
 import { 
-  Plus, Users, Search, DollarSign, Wallet, Phone, 
-  Trash2, Edit, ArrowLeftRight, CheckCircle2, AlertTriangle, UserPlus, BookOpen 
+  Plus, Users, Search, DollarSign, Wallet, Phone, Settings,
+  Trash2, Edit, ArrowLeftRight, CheckCircle2, AlertTriangle, UserPlus, BookOpen, Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
   const [auth, setAuth] = useState<AuthState>(getAuthState());
+  const [accountantPermissions, setAccountantPermissions] = useState<AccountantPermissions>(getAccountantPermissions());
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+
+  // Derived capability rules based on the logged-in role
+  const canDeleteCustomer = useMemo(() => {
+    return auth.role === 'admin' || accountantPermissions.deleteCustomer;
+  }, [auth.role, accountantPermissions.deleteCustomer]);
+
+  const canModifyTransactions = useMemo(() => {
+    return auth.role === 'admin' || accountantPermissions.modifyTransactions;
+  }, [auth.role, accountantPermissions.modifyTransactions]);
+
+  const canViewDashboard = useMemo(() => {
+    return auth.role === 'admin' || accountantPermissions.viewDashboard;
+  }, [auth.role, accountantPermissions.viewDashboard]);
+
+  const handleUpdatePermissions = (newPerms: AccountantPermissions) => {
+    setAccountantPermissions(newPerms);
+    saveAccountantPermissions(newPerms);
+    
+    // Also store these settings in the existing auth state
+    const updatedAuth = { ...auth, permissions: newPerms };
+    setAuth(updatedAuth);
+    saveAuthState(updatedAuth);
+  };
 
   // Selected customer for detailed Statement of Account ("كشف الحساب للعميل")
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
   // Search state
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Settings view toggle
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Modals state
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
@@ -40,27 +69,35 @@ export default function App() {
   const [confirmDeleteCustomerId, setConfirmDeleteCustomerId] = useState<string | null>(null);
 
   // Load initial data
-  useEffect(() => {
+  const handleRefreshData = () => {
     setCustomers(getCustomers());
     setTransactions(getTransactions());
+  };
+
+  useEffect(() => {
+    handleRefreshData();
   }, []);
 
   // Handle Login success
-  const handleLoginSuccess = (username: string) => {
-    const newState = { isAuthenticated: true, username };
+  const handleLoginSuccess = (username: string, role: 'admin' | 'accountant') => {
+    const newState = { isAuthenticated: true, username, role };
     setAuth(newState);
     saveAuthState(newState);
   };
 
   // Handle Logout
   const handleLogout = () => {
-    const newState = { isAuthenticated: false, username: '' };
+    const newState = { isAuthenticated: false, username: '', role: undefined };
     setAuth(newState);
     saveAuthState(newState);
   };
 
   // Delete Customer and their associated transactions safely
   const handleDeleteCustomer = (id: string) => {
+    if (!canDeleteCustomer) {
+      alert('عذراً! لا تملك صلاحية حذف العملاء وسجلاتهم. يرجى مراجعة المسؤول.');
+      return;
+    }
     const freshCustomers = customers.filter(c => c.id !== id);
     const freshTransactions = transactions.filter(t => t.customerId !== id);
     setCustomers(freshCustomers);
@@ -103,30 +140,48 @@ export default function App() {
 
       // Add auto initial balance transaction if requested
       if (initialBalance && initialBalance.amount > 0) {
-        const initialTx: Transaction = {
-          id: 'tx_init_' + Date.now(),
-          customerId: newId,
-          type: initialBalance.type,
-          amount: initialBalance.amount,
-          date: new Date().toISOString().split('T')[0],
-          description: initialBalance.type === 'debit' 
-            ? 'رصيد افتتاحي مقيد عند تسجيل العميل (مطلوب منه)'
-            : 'دفعة رصيد افتتاحية مسددة مقدماً من العميل (له)',
-          createdAt: new Date().toISOString()
-        };
-        const revisedTransactions = [...transactions, initialTx];
-        setTransactions(revisedTransactions);
-        saveTransactions(revisedTransactions);
+        if (!canModifyTransactions) {
+          alert('تنبيه: حسابك لا يملك صلاحية إضافة القيود المالية الافتتاحية للمستخدم. تم تسجيل العميل بدون رصيد مالي ابتدائي.');
+        } else {
+          const activeUsers = getUsers();
+          const loggedInUserObj = activeUsers.find(u => u.username === auth.username);
+          const creatorName = loggedInUserObj ? loggedInUserObj.fullName : auth.username;
+
+          const initialTx: Transaction = {
+            id: 'tx_init_' + Date.now(),
+            customerId: newId,
+            type: initialBalance.type,
+            amount: initialBalance.amount,
+            date: new Date().toISOString().split('T')[0],
+            description: initialBalance.type === 'debit' 
+              ? 'رصيد افتتاحي مقيد عند تسجيل العميل (مطلوب منه)'
+              : 'دفعة رصيد افتتاحية مسددة مقدماً من العميل (له)',
+            createdAt: new Date().toISOString(),
+            createdBy: creatorName
+          };
+          const revisedTransactions = [...transactions, initialTx];
+          setTransactions(revisedTransactions);
+          saveTransactions(revisedTransactions);
+        }
       }
     }
   };
 
   // Add Transaction callback
   const handleSaveTransaction = (transactionData: Omit<Transaction, 'id' | 'createdAt'>) => {
+    if (!canModifyTransactions) {
+      alert('عذراً! لا تملك صلاحية إضافة أو تسجيل قيود مالية جديدة.');
+      return;
+    }
+    const activeUsers = getUsers();
+    const loggedInUserObj = activeUsers.find(u => u.username === auth.username);
+    const creatorName = loggedInUserObj ? loggedInUserObj.fullName : auth.username;
+
     const newTx: Transaction = {
       id: 'tx_' + Date.now(),
       ...transactionData,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      createdBy: creatorName
     };
     const revisedTransactions = [...transactions, newTx];
     setTransactions(revisedTransactions);
@@ -135,6 +190,10 @@ export default function App() {
 
   // Delete Transaction callback
   const handleDeleteTransaction = (txId: string) => {
+    if (!canModifyTransactions) {
+      alert('عذراً! لا تملك صلاحية تعديل أو شطب القيود الحالية.');
+      return;
+    }
     const revisedTransactions = transactions.filter(t => t.id !== txId);
     setTransactions(revisedTransactions);
     saveTransactions(revisedTransactions);
@@ -192,17 +251,42 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans select-none" dir="rtl">
       {/* Dynamic Header Component */}
-      <Header 
-        username={auth.username} 
-        onLogout={handleLogout}
-        totalCustomers={customers.length}
-        totalDebitOverall={statisticsOverall.debitOverall}
-        totalCreditOverall={statisticsOverall.creditOverall}
-      />
+      <div className="print:hidden">
+        <Header 
+          username={auth.username} 
+          onLogout={handleLogout}
+          totalCustomers={customers.length}
+          totalDebitOverall={statisticsOverall.debitOverall}
+          totalCreditOverall={statisticsOverall.creditOverall}
+          onToggleSettings={() => {
+            setIsSettingsOpen(!isSettingsOpen);
+            setSelectedCustomerId(null);
+          }}
+          isSettingsOpen={isSettingsOpen}
+          canViewDashboard={canViewDashboard}
+        />
+      </div>
 
       <main className="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <AnimatePresence mode="wait">
-          {targetCustomer ? (
+          {isSettingsOpen ? (
+            /* ================= VIEW 3: SETTINGS & DATABASE & BACKUPS ================= */
+            <motion.div
+              key="settings"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.25 }}
+            >
+              <SettingsScreen 
+                currentUser={auth.username}
+                onBack={() => setIsSettingsOpen(false)}
+                onRefreshData={handleRefreshData}
+                accountantPermissions={accountantPermissions}
+                onUpdatePermissions={handleUpdatePermissions}
+              />
+            </motion.div>
+          ) : targetCustomer ? (
             /* ================= VIEW 2: STATEMENT OF ACCOUNT (كشف حساب العميل) ================= */
             <motion.div
               key="statement"
@@ -217,6 +301,7 @@ export default function App() {
                 onBack={() => setSelectedCustomerId(null)}
                 onAddTransaction={() => setIsTransactionModalOpen(true)}
                 onDeleteTransaction={handleDeleteTransaction}
+                canModifyTransactions={canModifyTransactions}
               />
             </motion.div>
           ) : (
@@ -229,7 +314,32 @@ export default function App() {
               transition={{ duration: 0.3 }}
               className="space-y-6"
             >
-              {/* Directory search and Add Client controls */}
+              {!canViewDashboard ? (
+                <div className="bg-white rounded-3xl p-12 text-center border border-slate-100 shadow-xl max-w-xl mx-auto space-y-6 my-10" dir="rtl">
+                  <div className="w-16 h-16 bg-rose-50 border border-rose-100/80 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
+                    <Lock className="w-7 h-7 text-rose-500 animate-pulse" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="font-extrabold text-slate-800 text-lg">صلاحية الدخول لوحة القيادة معطلة</h3>
+                    <p className="text-slate-500 text-xs leading-relaxed max-w-md mx-auto">
+                      تم إلغاء أو حظر صلاحية وصول حساب المحاسب الخاص بك لتصفح لوحة التحكم الرئيسية ومطالعة أرصدة العملاء من قبل مدير النظام.
+                    </p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-slate-650 text-xs text-right space-y-2">
+                    <p className="font-bold text-slate-800 flex items-center gap-1">
+                      <AlertTriangle className="w-4 h-4 text-amber-500" />
+                      <span>ماذا يعني ذلك؟</span>
+                    </p>
+                    <ul className="list-disc list-inside space-y-1.5 pr-1 text-slate-500 leading-relaxed">
+                      <li>لا يسمح لك بتصفح أو البحث في قائمة كشوف العملاء المقيدين.</li>
+                      <li>تم حجب تفاصيل الأرصدة الإجمالية وصافي تقارير المديونية من أعلى الشاشة لأسباب أمنية.</li>
+                      <li>لتعديل ذلك، يرجى الاستعانة بمدير النظام (Admin) لتفعيل الصلاحية من شاشة الإعدادات.</li>
+                    </ul>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Directory search and Add Client controls */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 bg-indigo-50 text-indigo-700 rounded-xl">
@@ -392,7 +502,15 @@ export default function App() {
                             </button>
 
                             {/* Safe Deletion trigger */}
-                            {confirmDeleteCustomerId === customer.id ? (
+                            {!canDeleteCustomer ? (
+                              <button
+                                disabled
+                                className="p-1.5 bg-slate-50 text-slate-300 border border-slate-100 rounded-lg sm:h-8 sm:w-8 flex items-center justify-center cursor-not-allowed"
+                                title="صلاحية حذف العملاء معطلة للمحاسب المالي"
+                              >
+                                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                              </button>
+                            ) : confirmDeleteCustomerId === customer.id ? (
                               <div className="flex items-center gap-1">
                                 <button
                                   onClick={() => handleDeleteCustomer(customer.id)}
@@ -423,13 +541,15 @@ export default function App() {
                   })}
                 </div>
               )}
+                </>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
       </main>
 
       {/* Footer system details */}
-      <footer className="bg-white border-t border-slate-200/80 py-5 text-center mt-12 bg-slate-50" dir="rtl">
+      <footer className="bg-white border-t border-slate-200/80 py-5 text-center mt-12 bg-slate-50 print:hidden" dir="rtl">
         <p className="text-xs text-slate-400 font-medium leading-relaxed">
           نظام مالي لإدارة الديون البسيطة والميزانية (مدين ودائن) • 2026
         </p>

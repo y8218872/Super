@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { ShieldCheck, LogOut, TrendingUp, TrendingDown, Users, Wallet } from 'lucide-react';
+import { ShieldCheck, LogOut, TrendingUp, TrendingDown, Users, Wallet, Settings } from 'lucide-react';
 
 interface HeaderProps {
   username: string;
@@ -12,6 +12,9 @@ interface HeaderProps {
   totalCustomers: number;
   totalDebitOverall: number;
   totalCreditOverall: number;
+  onToggleSettings: () => void;
+  isSettingsOpen: boolean;
+  canViewDashboard?: boolean;
 }
 
 export default function Header({ 
@@ -19,7 +22,10 @@ export default function Header({
   onLogout, 
   totalCustomers, 
   totalDebitOverall, 
-  totalCreditOverall 
+  totalCreditOverall,
+  onToggleSettings,
+  isSettingsOpen,
+  canViewDashboard = true
 }: HeaderProps) {
   
   const netDebtDifference = totalDebitOverall - totalCreditOverall;
@@ -38,7 +44,19 @@ export default function Header({
               <span className="text-slate-400">المحاسب:</span>
               <span className="text-indigo-600 font-bold">{username || 'مدير النظام'}</span>
             </div>
+            
             <span className="text-slate-350">|</span>
+            
+            <button
+              onClick={onToggleSettings}
+              className={`hover:text-indigo-600 transition flex items-center gap-1 font-bold cursor-pointer ${isSettingsOpen ? 'text-indigo-600' : ''}`}
+            >
+              <Settings className="w-3.5 h-3.5 animate-spin-slow" />
+              <span>{isSettingsOpen ? 'لوحة القيادة الرئيسية' : 'شاشة الإعدادات والنسخ'}</span>
+            </button>
+
+            <span className="text-slate-350">|</span>
+
             <button
               onClick={onLogout}
               className="hover:text-rose-600 transition flex items-center gap-1 font-bold cursor-pointer"
@@ -73,7 +91,13 @@ export default function Header({
                 <span>إجمالي المدين (لنا)</span>
               </p>
               <p className="text-xl sm:text-2xl font-bold text-emerald-600 font-mono">
-                {totalDebitOverall.toLocaleString('en-US', { minimumFractionDigits: 2 })} <span className="text-xs font-normal text-slate-400">ر.س</span>
+                {canViewDashboard ? (
+                  <>
+                    {totalDebitOverall.toLocaleString('en-US', { minimumFractionDigits: 2 })} <span className="text-xs font-normal text-slate-400">ر.س</span>
+                  </>
+                ) : (
+                  <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1 w-max justify-end self-end">🔒 محجوب</span>
+                )}
               </p>
             </div>
 
@@ -84,7 +108,13 @@ export default function Header({
                 <span>إجمالي الدائن (علينا)</span>
               </p>
               <p className="text-xl sm:text-2xl font-bold text-rose-600 font-mono">
-                {totalCreditOverall.toLocaleString('en-US', { minimumFractionDigits: 2 })} <span className="text-xs font-normal text-slate-400">ر.س</span>
+                {canViewDashboard ? (
+                  <>
+                    {totalCreditOverall.toLocaleString('en-US', { minimumFractionDigits: 2 })} <span className="text-xs font-normal text-slate-400">ر.س</span>
+                  </>
+                ) : (
+                  <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1 w-max justify-end self-end">🔒 محجوب</span>
+                )}
               </p>
             </div>
 
@@ -94,8 +124,14 @@ export default function Header({
                 <Wallet className="w-3.5 h-3.5 text-indigo-600" />
                 <span>صافي المستحقات</span>
               </p>
-              <p className={`text-xl sm:text-2xl font-bold font-mono ${netDebtDifference >= 0 ? 'text-slate-900' : 'text-emerald-700'}`}>
-                {netDebtDifference.toLocaleString('en-US', { minimumFractionDigits: 2 })} <span className="text-xs font-normal text-slate-400">ر.س</span>
+              <p className={`text-xl sm:text-2xl font-bold font-mono ${canViewDashboard && netDebtDifference >= 0 ? 'text-slate-900' : canViewDashboard ? 'text-emerald-700' : 'text-slate-400'}`}>
+                {canViewDashboard ? (
+                  <>
+                    {netDebtDifference.toLocaleString('en-US', { minimumFractionDigits: 2 })} <span className="text-xs font-normal text-slate-400">ر.س</span>
+                  </>
+                ) : (
+                  <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1 w-max justify-end self-end">🔒 محجوب</span>
+                )}
               </p>
             </div>
 
@@ -106,7 +142,13 @@ export default function Header({
                 <span>العملاء المقيدين</span>
               </p>
               <p className="text-xl sm:text-2xl font-bold text-slate-800 font-mono">
-                {totalCustomers} <span className="text-xs font-normal text-slate-400">أفراد/شركات</span>
+                {canViewDashboard ? (
+                  <>
+                    {totalCustomers} <span className="text-xs font-normal text-slate-400">أفراد/شركات</span>
+                  </>
+                ) : (
+                  <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1 w-max justify-end self-end">🔒 محجوب</span>
+                )}
               </p>
             </div>
           </div>
