@@ -141,7 +141,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             </button>
           </form>
 
-          {/* Quick tips panel with demo parameters */}
+          {/* Quick tips panel with demo parameters 
           <div className="mt-8 pt-6 border-t border-slate-100">
             <div className="bg-slate-50 rounded-xl p-4 border border-dashed border-slate-200">
               <div className="flex items-center gap-2 text-slate-600 mb-2 text-xs font-bold">
@@ -157,7 +157,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                 </div>
               </div>
             </div>
-          </div>
+          </div>*/}
         </div>
 
         <div className="bg-slate-50 px-8 py-4 border-t border-slate-100 text-center">
