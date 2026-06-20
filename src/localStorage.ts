@@ -247,9 +247,8 @@ export function getDatabaseConfig(): DatabaseConfig {
       return config;
     }
     const parsed = JSON.parse(data);
-    // If it was local or unconfigured with host, pre-populate the PostgreSQL fields so they're instantly ready
+    parsed.type = 'postgresql';
     if (!parsed.host) {
-      parsed.type = 'postgresql';
       parsed.host = 'ma4s0o.h.filess.io';
       parsed.port = '61008';
       parsed.databaseName = 'Psql_afraidbuy';
@@ -277,7 +276,8 @@ export function getDatabaseConfig(): DatabaseConfig {
 
 export function saveDatabaseConfig(config: DatabaseConfig): void {
   try {
-    localStorage.setItem(DB_CONFIG_KEY, JSON.stringify(config));
+    const secureConfig = { ...config, type: 'postgresql' as const };
+    localStorage.setItem(DB_CONFIG_KEY, JSON.stringify(secureConfig));
   } catch (error) {
     console.error('Error saving database config', error);
   }
